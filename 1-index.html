@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>שומעים כתוביות — נגן שמקריא את הכתוביות בקול</title>
+<meta name="description" content="טוענים סרטון וקובץ כתוביות, והמכשיר מקריא את הכתוביות בקול בזמן הצפייה. הכל נשאר במכשיר.">
+<style>
+:root{--bg:#101418;--card:#1a2027;--line:#2b333d;--txt:#f2f5f8;--dim:#aab6c2;--acc:#4db2ff;--acc2:#ffd166;--ok:#7ce38b;--err:#ff8a8a}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;font-size:17px;line-height:1.55;padding:0 0 3rem}
+header{padding:1.1rem 1rem .4rem}
+h1{font-size:1.45rem;margin:0 0 .25rem}
+.sub{color:var(--dim);font-size:.95rem;margin:0}
+main{max-width:640px;margin:0 auto;padding:0 1rem}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1rem;margin-top:1rem}
+h2{font-size:1.05rem;margin:0 0 .6rem}
+button{font:inherit;color:var(--txt);background:#242c36;border:1px solid var(--line);border-radius:12px;min-height:52px;padding:.6rem 1rem;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
+button:active{background:#2e3844}
+button.primary{background:var(--acc);color:#06121d;border-color:transparent;font-weight:700}
+button.ghost{background:transparent}
+.row{display:flex;gap:.6rem;flex-wrap:wrap}
+.row>button{flex:1 1 45%}
+video{width:100%;border-radius:10px;background:#000;display:block}
+.hidden-input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
+.status{margin-top:.8rem;font-size:.95rem;color:var(--dim);min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.note{font-size:.9rem;color:var(--acc2);margin:.6rem 0 0}
+label.slider{display:block;margin-top:.8rem;font-size:.95rem}
+label.slider span{display:flex;justify-content:space-between;color:var(--dim)}
+input[type=range]{width:100%;min-height:44px;accent-color:var(--acc)}
+.transcript{font-size:1.15rem;line-height:2;background:#141a20;border-radius:10px;padding:.9rem;max-height:55vh;overflow:auto;white-space:pre-wrap}
+.toggle{display:flex;align-items:center;gap:.7rem;margin-top:.8rem;font-size:1rem}
+.toggle input{width:26px;height:26px;accent-color:var(--acc)}
+.filechips{color:var(--dim);font-size:.9rem;margin-top:.5rem;word-break:break-all}
+footer{color:var(--dim);font-size:.85rem;text-align:center;margin-top:1.6rem;padding:0 1rem}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+<h1>שומעים כתוביות</h1>
+<p class="sub">טוענים סרטון וקובץ כתוביות מהמכשיר, והכתוביות מוקראות בקול בזמן הצפייה. הקבצים לא עוברים לשום שרת.</p>
+</header>
+<main>
+<section id="pick">
+<h2>1. בחירת קבצים</h2>
+<div class="row">
+<button id="btnVideo" class="primary">בחירת סרטון</button>
+<button id="btnSubs" class="primary">בחירת קובץ כתוביות</button>
+</div>
+<input type="file" id="inVideo" class="hidden-input" accept="video/*,audio/*,.mkv,.m4v" aria-hidden="true" tabindex="-1">
+<input type="file" id="inSubs" class="hidden-input" accept=".srt,.vtt,.ass,.ssa,.txt" aria-hidden="true" tabindex="-1">
+<div class="filechips" id="chips"></div>
+<div class="row" style="margin-top:.8rem">
+<button id="btnDemo">נסה דוגמה מוכנה</button>
+</div>
+</section>
+
+<section id="play" hidden>
+<h2>2. צפייה עם קריינות</h2>
+<video id="vid" controls playsinline></video>
+<div class="toggle">
+<input type="checkbox" id="chkSpeak" checked>
+<label for="chkSpeak">להקריא כתוביות בקול</label>
+</div>
+<label class="slider" for="rngRate"><span>מהירות קריינות</span><span id="rateVal">רגיל</span></label>
+<input type="range" id="rngRate" min="70" max="160" value="105" aria-label="מהירות קריינות">
+<label class="slider" for="rngVol"><span>עוצמת שמע הסרטון</span><span id="volVal">25%</span></label>
+<input type="range" id="rngVol" min="0" max="100" value="25" aria-label="עוצמת שמע הסרטון">
+<div class="status" id="nowCue" role="status" aria-live="polite"></div>
+</section>
+
+<section id="read" hidden>
+<h2>קריאה כטקסט רציף</h2>
+<div class="row">
+<button id="btnTranscript">הצגת כל הכתוביות כטקסט לקריאה</button>
+<button id="btnCopy" hidden>העתקת הטקסט</button>
+</div>
+<div class="transcript" id="transcript" hidden tabindex="0"></div>
+</section>
+
+<section id="actions" hidden>
+<div class="row">
+<button id="btnReset" class="ghost">איפוס והתחלה מחדש</button>
+</div>
+</section>
+
+<p class="status" id="status" role="status" aria-live="polite"></p>
+<p class="note" id="voiceNote" hidden></p>
+</main>
+<footer>הקבצים מעובדים רק במכשיר שלך ולא נשלחים לשום מקום. איכות הקריינות תלויה בקול העברי שמותקן במכשיר.</footer>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const statusEl=$("status"),chips=$("chips"),nowCue=$("nowCue"),vid=$("vid");
+let cues=[],videoURL=null,speaking=false,curIdx=-1,heVoice=null,demoMode=false;
+
+function say(msg,cls){statusEl.textContent=msg;statusEl.className="status "+(cls||"")}
+function setChips(){const p=[];if(videoURL)p.push("סרטון נטען");if(cues.length)p.push(cues.length+" כתוביות נטענו");chips.textContent=p.join(" · ")}
+
+/* ---- voices ---- */
+let speechOK=("speechSynthesis" in window), voicesSeen=false;
+window.__spokenLog=[]; // diagnostics: record utterances created (env may have no audio)
+function pickVoice(){
+  if(!speechOK)return;
+  const vs=speechSynthesis.getVoices();
+  if(vs.length)voicesSeen=true;
+  heVoice=vs.find(v=>/^he([-_]|$)/i.test(v.lang))||vs.find(v=>/hebrew|\u05e2\u05d1\u05e8\u05d9\u05ea/i.test(v.name))||null;
+  const n=$("voiceNote");
+  if(!vs.length){n.hidden=true;return}
+  if(heVoice){n.hidden=true}
+  else{n.hidden=false;n.textContent="\u05e9\u05dd \u05dc\u05d1: \u05dc\u05d0 \u05e0\u05de\u05e6\u05d0 \u05e7\u05d5\u05dc \u05e2\u05d1\u05e8\u05d9 \u05de\u05d5\u05ea\u05e7\u05df \u05e9\u05d4\u05d3\u05e4\u05d3\u05e4\u05df \u05de\u05d6\u05d4\u05d4. \u05d9\u05d9\u05ea\u05db\u05df \u05e9\u05d4\u05d4\u05e7\u05e8\u05d0\u05d4 \u05ea\u05e6\u05d0 \u05dc\u05d0 \u05e0\u05db\u05d5\u05e0\u05d4. \u05de\u05e6\u05d1 \u05e7\u05e8\u05d9\u05d0\u05d4 \u05db\u05d8\u05e7\u05e1\u05d8 \u05e2\u05d5\u05d1\u05d3 \u05d1\u05db\u05dc \u05de\u05e7\u05e8\u05d4."}
+}
+if(speechOK){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+else{
+  const n=$("voiceNote");n.hidden=false;
+  n.textContent="\u05d4\u05d3\u05e4\u05d3\u05e4\u05df \u05d4\u05d6\u05d4 \u05dc\u05d0 \u05ea\u05d5\u05de\u05da \u05d1\u05d4\u05e7\u05e8\u05d0\u05d4 \u05d1\u05e7\u05d5\u05dc. \u05e6\u05e4\u05d9\u05d9\u05d4 \u05d5\u05de\u05e6\u05d1 \u05e7\u05e8\u05d9\u05d0\u05d4 \u05db\u05d8\u05e7\u05e1\u05d8 \u05e2\u05d3\u05d9\u05d9\u05e3 \u05e2\u05d5\u05d1\u05d3\u05d9\u05dd.";
+  $("chkSpeak").disabled=true;
+}
+window.__voices=function(){return speechOK?speechSynthesis.getVoices().map(v=>v.lang+" / "+v.name):[]}
+
+/* ---- encoding: bytes -> text ---- */
+function decodeBytes(buf){
+  const b=new Uint8Array(buf);
+  try{return{ text:new TextDecoder("utf-8",{fatal:true}).decode(b), fixed:false}}
+  catch(e){}
+  try{return{ text:new TextDecoder("windows-1255").decode(b), fixed:true}}
+  catch(e){return{ text:new TextDecoder("utf-8").decode(b), fixed:false}}
+}
+
+/* ---- time parse ---- */
+function toSec(s){
+  const m=s.trim().replace(",",".").match(/(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?/);
+  if(!m)return null;
+  const h=parseInt(m[1]||"0",10),mi=parseInt(m[2],10),se=parseInt(m[3],10),ms=parseInt((m[4]||"0").padEnd(3,"0"),10);
+  return h*3600+mi*60+se+ms/1000;
+}
+function cleanText(t){
+  return t.replace(/\{[^}]*\}/g," ").replace(/<[^>]+>/g," ").replace(/\\N/gi," ")
+    .replace(/[♪♫]/g," ").replace(/\s+/g," ").trim();
+}
+function parseSubs(text,fileName){
+  const name=(fileName||"").toLowerCase();
+  if(name.endsWith(".ass")||name.endsWith(".ssa")||/\[Events\]/i.test(text)){
+    const out=[];
+    for(const line of text.split(/\r?\n/)){
+      if(!/^Dialogue:/i.test(line))continue;
+      const parts=line.slice(9).split(",");
+      if(parts.length<10)continue;
+      const s=toSec(parts[1]),e=toSec(parts[2]),tx=cleanText(parts.slice(9).join(","));
+      if(s!=null&&e!=null&&tx)out.push({s,e,tx});
+    }
+    return out;
+  }
+  const blocks=text.replace(/\uFEFF/g,"").split(/\r?\n\s*\r?\n/);
+  const out=[];
+  for(const bl of blocks){
+    const lines=bl.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    if(!lines.length)continue;
+    let i=lines.findIndex(l=>l.includes("-->"));
+    if(i<0)continue;
+    const tl=lines[i];
+    const mm=tl.match(/(\S+)\s*-->\s*(\S+)/);
+    if(!mm)continue;
+    const s=toSec(mm[1]),e=toSec(mm[2]);
+    const tx=cleanText(lines.slice(i+1).join(" "));
+    if(s!=null&&e!=null&&tx)out.push({s,e,tx});
+  }
+  return out;
+}
+
+/* ---- file inputs ---- */
+$("btnVideo").addEventListener("click",()=>$("inVideo").click());
+$("btnSubs").addEventListener("click",()=>$("inSubs").click());
+$("inVideo").addEventListener("change",e=>{
+  const f=e.target.files[0];if(!f)return;
+  if(videoURL)URL.revokeObjectURL(videoURL);
+  videoURL=URL.createObjectURL(f);
+  vid.src=videoURL;demoMode=false;
+  setChips();say("הסרטון נטען. אם יש כבר כתוביות אפשר לצפות.","ok");reveal();
+});
+$("inSubs").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const buf=await f.arrayBuffer();
+    const dec=decodeBytes(buf);
+    const parsed=parseSubs(dec.text,f.name);
+    if(!parsed.length){say("לא נמצאו כתוביות בקובץ. נסה קובץ SRT, VTT או ASS.","err");return}
+    cues=parsed.sort((a,b)=>a.s-b.s);curIdx=-1;
+    setChips();
+    say(dec.fixed?("נטענו "+cues.length+" כתוביות, ותוקן קידוד שהיה מוצג כג'יבריש."):("נטענו "+cues.length+" כתוביות."),"ok");
+    reveal();
+  }catch(err){say("לא הצלחתי לקרוא את הקובץ.","err")}
+});
+
+/* ---- demo ---- */
+let demoTimer=null;
+$("btnDemo").addEventListener("click",()=>{
+  say("טוען דוגמה...");
+  if(videoURL&&videoURL.startsWith("blob:"))URL.revokeObjectURL(videoURL);
+  videoURL="demo.mp4";vid.src=videoURL;demoMode=true;
+  clearTimeout(demoTimer);
+  demoTimer=setTimeout(()=>{ // some browsers claim mp4 support but stall; fall back to webm
+    if(demoMode&&vid.readyState===0&&/demo\.mp4$/.test(vid.src)){videoURL="demo.webm";vid.src=videoURL;vid.load()}
+  },8000);
+  fetch("demo.srt").then(r=>{if(!r.ok)throw 0;return r.text()}).then(st=>{
+    cues=parseSubs(st,"demo.srt").sort((a,b)=>a.s-b.s);curIdx=-1;
+    setChips();say("הדוגמה מוכנה. לחץ על נגן בסרטון, והכתוביות יוקראו בקול.","ok");reveal();
+    $("play").scrollIntoView({behavior:"smooth",block:"start"});
+  }).catch(()=>say("הדוגמה לא נטענה. בדוק חיבור ונסה שוב.","err"));
+});
+vid.addEventListener("error",()=>{
+  if(!vid.src)return;
+  if(demoMode&&/demo\.mp4$/.test(vid.src)){videoURL="demo.webm";vid.src=videoURL;vid.load();return}
+  say("הסרטון לא מצליח לנגן בדפדפן הזה. ייתכן שהפורמט לא נתמך במכשיר. אפשר לנסות קובץ אחר, או רק לטעון כתוביות ולקרוא אותן כטקסט.","err");
+});
+/* ---- speech sync ---- */
+function speakText(t){
+  if(!speechOK)return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t);
+  u.lang="he-IL";if(heVoice)u.voice=heVoice;
+  u.rate=parseInt($("rngRate").value,10)/100;
+  window.__spokenLog.push({t:t.slice(0,60),lang:u.lang,voice:u.voice?u.voice.name:null,rate:u.rate,at:vid.currentTime});
+  u.onerror=function(e){window.__spokenLog.push({error:String(e.error||e),t:t.slice(0,40)})};
+  speechSynthesis.speak(u);
+}
+function warnIfNoVoices(){
+  if(!speechOK)return;
+  pickVoice();
+  if(!speechSynthesis.getVoices().length){
+    say("\u05e9\u05d9\u05dd \u05dc\u05d1: \u05d1\u05d3\u05e4\u05d3\u05e4\u05df \u05d4\u05d6\u05d4 \u05dc\u05d0 \u05e0\u05de\u05e6\u05d0 \u05de\u05e0\u05d5\u05e2 \u05d3\u05d9\u05d1\u05d5\u05e8, \u05dc\u05db\u05df \u05d9\u05d9\u05ea\u05db\u05df \u05e9\u05dc\u05d0 \u05ea\u05d4\u05d9\u05d4 \u05d4\u05e7\u05e8\u05d0\u05d4 \u05de\u05e9\u05de\u05e2\u05d5\u05ea\u05d9\u05ea. \u05e6\u05e4\u05d9\u05d9\u05d4 \u05d5\u05e7\u05e8\u05d9\u05d0\u05d4 \u05db\u05d8\u05e7\u05e1\u05d8 \u05e2\u05d5\u05d1\u05d3\u05d9\u05dd.","err");
+  }
+}
+vid.addEventListener("play",warnIfNoVoices);
+vid.addEventListener("timeupdate",()=>{
+  if(!cues.length)return;
+  const t=vid.currentTime;
+  let idx=-1;
+  for(let i=0;i<cues.length;i++){if(t>=cues[i].s&&t<cues[i].e){idx=i;break}}
+  if(idx===curIdx)return;
+  curIdx=idx;
+  if(idx>=0){
+    nowCue.textContent="כתובית "+(idx+1)+" מתוך "+cues.length+": "+cues[idx].tx;
+    if($("chkSpeak").checked)speakText(cues[idx].tx);
+  }else{
+    nowCue.textContent="";
+    if(speechOK)speechSynthesis.cancel();
+  }
+});
+vid.addEventListener("seeked",()=>{if(speechOK)speechSynthesis.cancel();curIdx=-2;
+  // leave curIdx "unknown" so the following timeupdate re-displays and re-speaks the cue at the new position
+  vid.dispatchEvent(new Event("timeupdate"));
+});
+vid.addEventListener("pause",()=>{if(speechOK)speechSynthesis.cancel()});
+vid.addEventListener("ended",()=>{if(speechOK)speechSynthesis.cancel()});
+$("chkSpeak").addEventListener("change",e=>{
+  if(!e.target.checked){if(speechOK)speechSynthesis.cancel()}
+  else if(curIdx>=0&&cues[curIdx])speakText(cues[curIdx].tx);
+  say(e.target.checked?"הקראה בקול מופעלת":"הקראה בקול כבויה");
+});
+$("rngRate").addEventListener("input",e=>{
+  const v=parseInt(e.target.value,10);
+  $("rateVal").textContent=v<90?"איטי":v>125?"מהיר":"רגיל";
+});
+$("rngVol").addEventListener("input",e=>{
+  const v=parseInt(e.target.value,10)/100;
+  vid.volume=v;$("volVal").textContent=Math.round(v*100)+"%";
+});
+vid.volume=0.25;
+
+/* ---- transcript ---- */
+$("btnTranscript").addEventListener("click",()=>{
+  if(!cues.length){say("עדיין לא נטענו כתוביות.","err");return}
+  const merged=[];
+  for(const c of cues){
+    const tx=c.tx.replace(/^-\s*/,"");
+    if(merged.length&&merged[merged.length-1].slice(-1)!=="."&&merged[merged.length-1].slice(-1)!=="?"&&merged[merged.length-1].slice(-1)!=="!"&&merged[merged.length-1]===tx)continue;
+    if(merged.length&&merged[merged.length-1]===tx)continue;
+    merged.push(tx);
+  }
+  const tr=$("transcript");
+  tr.textContent=merged.join(" ");
+  tr.hidden=false;$("btnCopy").hidden=false;
+  say("הטקסט הרציף מוצג. אפשר לקרוא עם TalkBack או להעתיק.","ok");
+  tr.focus();
+});
+$("btnCopy").addEventListener("click",async()=>{
+  try{await navigator.clipboard.writeText($("transcript").textContent);say("הטקסט הועתק.","ok")}
+  catch(e){say("ההעתקה נחסמה בדפדפן. אפשר לסמן ולהעתיק ידנית.","err")}
+});
+
+/* ---- reset ---- */
+$("btnReset").addEventListener("click",()=>{
+  if(speechOK)speechSynthesis.cancel();
+  clearTimeout(demoTimer);
+  if(videoURL)URL.revokeObjectURL(videoURL);
+  videoURL=null;cues=[];curIdx=-1;demoMode=false;
+  vid.removeAttribute("src");vid.load();
+  $("inVideo").value="";$("inSubs").value="";
+  $("transcript").hidden=true;$("transcript").textContent="";$("btnCopy").hidden=true;
+  nowCue.textContent="";chips.textContent="";
+  $("play").hidden=true;$("read").hidden=true;$("actions").hidden=true;
+  say("אופס. אפשר לבחור קבצים חדשים.");$("btnVideo").focus();
+});
+function reveal(){
+  const hasV=!!videoURL,hasS=cues.length>0;
+  $("play").hidden=!hasV;
+  $("read").hidden=!hasS;
+  $("actions").hidden=!(hasV||hasS);
+  if(hasV)vid.volume=parseInt($("rngVol").value,10)/100;
+}
+</script>
+</body>
+</html>
